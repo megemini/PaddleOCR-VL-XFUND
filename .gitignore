@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb_checkpoints/
+
+# Environment
+.venv/
+venv/
+env/
+conda_env/
+.paddlehub/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data / Dataset
+work/dataset/**/*.zip
+work/dataset/**/*.tar
+work/dataset/**/*.gz
+work/dataset/**/*.pkl
+
+# Logs & Evaluation Results
+*.log
+**/tensorboard/
+**/vdl_log*/
+
+# Models & Checkpoints
+*.pth
+*.pt
+*.pdparams
+*.pdopt
+*.pdmodel
+*.onnx
+output/
+checkpoint/
+best_model/
+
+# Large files
+*.zip
+*.tar
+*.gz
+*.rar
+
+# 
+tmp/
+
+# YAML lock (not used in this context but common)
+*.lock
