@@ -1,13 +1,43 @@
 #!/usr/bin/env python3
-"""Convert annotation files to JSONL format for invoice information extraction."""
+"""Extract information from invoice images and annotations.
+
+Usage:
+    python extract_fatura.py --images_dir <path_to_images> [options]
+
+Examples:
+    # Use pseudo paths (path/to/image.jpg)
+    python extract_fatura.py --images_dir invoices_dataset_final/images --pseudo_path
+
+    # Use real image paths
+    python extract_fatura.py --images_dir invoices_dataset_final/images
+
+    # Custom annotation directory and output file
+    python extract_fatura.py \
+        --images_dir invoices_dataset_final/images \
+        --annotations_dir invoices_dataset_final/Annotations/Original_Format \
+        --output_file my_output.jsonl \
+        --pseudo_path
+
+Arguments:
+    --images_dir       Directory containing invoice images (required)
+    --annotations_dir  Directory containing annotation JSON files
+                       (default: invoices_dataset_final/Annotations/Original_Format)
+    --output_file      Output JSONL file path
+                       (default: extracted_invoices.jsonl)
+    --pseudo_path      Use pseudo image paths (path/to/image.jpg)
+                       If not set, real image paths will be used
+
+Output Format:
+    Each line is a JSON object with:
+    - image_info: List of image references with matched_text_index and image_url
+    - text_info: List of text entries with "mask" (OCR placeholder) and "no_mask" (extracted data as JSON string)
+"""
 
 import json
 import os
 import glob
 import re
-
-ANNOTATIONS_DIR = "invoices_dataset_final/Annotations/Original_Format"
-OUTPUT_FILE = "extracted_invoices.jsonl"
+import argparse
 
 
 def split_key_value(text):
@@ -181,7 +211,6 @@ def extract_fields(annotation):
     # DISCOUNT - strip "DISCOUNT" prefix from value
     if "DISCOUNT" in annotation:
         discount_text = annotation["DISCOUNT"].get("text", "")
-        # "DISCOUNT(2.14%): (-) 9.39" -> "(2.14%): (-) 9.39"
         if discount_text.startswith("DISCOUNT"):
             discount_text = discount_text[8:].strip()
         extracted["DISCOUNT"] = discount_text
@@ -189,7 +218,6 @@ def extract_fields(annotation):
     # TAX - strip "TAX:" prefix from value
     if "TAX" in annotation:
         tax_text = annotation["TAX"].get("text", "")
-        # "TAX:VAT (3.85%): 10.26 $" -> "VAT (3.85%): 10.26 $"
         if tax_text.startswith("TAX:"):
             tax_text = tax_text[4:].strip()
         elif tax_text.startswith("TAX :"):
@@ -235,34 +263,64 @@ def extract_fields(annotation):
     return extracted
 
 
-def main():
-    annotation_files = sorted(glob.glob(os.path.join(ANNOTATIONS_DIR, "*.json")))
-    print(f"Found {len(annotation_files)} annotation files")
+def extracted_data_to_string(extracted_data):
+    """Convert extracted_data dict to JSON string format."""
+    return json.dumps(extracted_data, ensure_ascii=False)
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+
+def get_image_path(doc_id, images_dir, use_pseudo_path):
+    """Get image path based on configuration."""
+    # doc_id is like "Template10_Instance0"
+    image_filename = doc_id + ".jpg"
+    
+    if use_pseudo_path:
+        return f"path/to/{image_filename}"
+    else:
+        return os.path.join(images_dir, image_filename)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Extract information from invoice images")
+    parser.add_argument("--images_dir", required=True, help="Directory containing invoice images")
+    parser.add_argument("--annotations_dir", default="invoices_dataset_final/Annotations/Original_Format",
+                        help="Directory containing annotation JSON files")
+    parser.add_argument("--output_file", default="extracted_invoices.jsonl",
+                        help="Output JSONL file path")
+    parser.add_argument("--pseudo_path", action="store_true",
+                        help="Use pseudo image paths (path/to/image.jpg)")
+    
+    args = parser.parse_args()
+    
+    annotation_files = sorted(glob.glob(os.path.join(args.annotations_dir, "*.json")))
+    print(f"Found {len(annotation_files)} annotation files")
+    
+    with open(args.output_file, "w", encoding="utf-8") as f:
         for i, filepath in enumerate(annotation_files):
             filename = os.path.basename(filepath)
             doc_id = filename.replace(".json", "")
-
+            
             with open(filepath, "r", encoding="utf-8") as af:
                 annotation = json.load(af)
-
+            
             extracted_data = extract_fields(annotation)
-
+            image_url = get_image_path(doc_id, args.images_dir, args.pseudo_path)
+            
             record = {
-                "document_id": doc_id,
-                "extracted_data": extracted_data,
-                "raw_response": json.dumps(annotation, ensure_ascii=False, indent=2),
-                "status": "success",
-                "fallback_used": False,
+                "image_info": [
+                    {"matched_text_index": 0, "image_url": image_url}
+                ],
+                "text_info": [
+                    {"text": "OCR:{}", "tag": "mask"},
+                    {"text": extracted_data_to_string(extracted_data), "tag": "no_mask"}
+                ]
             }
-
+            
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
+            
             if (i + 1) % 1000 == 0:
                 print(f"Processed {i + 1}/{len(annotation_files)} files")
-
-    print(f"Done! Output written to {OUTPUT_FILE}")
+    
+    print(f"Done! Output written to {args.output_file}")
     print(f"Total records: {len(annotation_files)}")
 
 
